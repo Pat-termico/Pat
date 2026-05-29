@@ -41,7 +41,7 @@ export default function App() {
 
   const exportCsv = async () => {
     if (!history.length) return;
-    const header = ["DataHora", "T1", "T2", "T3", "TA", "U", "hPa", "VOC"];
+    const header = ["DataHora", "T1", "T2", "TA", "U", "hPa", "VOC"];
     const lines = ["sep=;", header.join(";")];
     for (const r of history) {
       lines.push(
@@ -49,7 +49,6 @@ export default function App() {
           formatDateTimePtBr(r.ts),
           formatCsvNumber(r.t1, 1),
           formatCsvNumber(r.t2, 1),
-          formatCsvNumber(r.t3, 1),
           formatCsvNumber(r.temp, 1),
           formatCsvNumber(r.hum, 0),
           formatCsvNumber(r.pressure, 0),
@@ -112,7 +111,6 @@ export default function App() {
 
   const therm1 = useMemo(() => history.map((p) => ({ ts: p.ts, v: p.t1 })), [history]);
   const therm2 = useMemo(() => history.map((p) => ({ ts: p.ts, v: p.t2 })), [history]);
-  const therm3 = useMemo(() => history.map((p) => ({ ts: p.ts, v: p.t3 })), [history]);
   const pressureHpa = Number.isFinite(latest?.pressure) ? Number(latest?.pressure) : pressureRef.current;
 
   const historyRows: HistoryRow[] = useMemo(() => {
@@ -121,8 +119,7 @@ export default function App() {
       ts: p.ts,
       label: formatTimeLabel(p.ts),
       t1: p.t1,
-      t2: p.t2,
-      t3: p.t3
+      t2: p.t2
     }));
   }, [history]);
 
@@ -136,7 +133,7 @@ export default function App() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-slate-900">Termopares Tipo K</div>
-                <div className="text-xs text-slate-500">3 canais • destaque + mini gráfico</div>
+                <div className="text-xs text-slate-500">2 canais • destaque + mini gráfico</div>
               </div>
               <div className="hidden items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-soft ring-1 ring-slate-200/60 sm:flex">
                 <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-500" : "bg-slate-300"}`} />
@@ -144,19 +141,13 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               <ThermocoupleCard title="Termopar 1" value={latest?.t1 ?? 0} color="red" history={therm1} />
               <ThermocoupleCard
                 title="Termopar 2"
                 value={latest?.t2 ?? 0}
                 color="orange"
                 history={therm2}
-              />
-              <ThermocoupleCard
-                title="Termopar 3"
-                value={latest?.t3 ?? 0}
-                color="green"
-                history={therm3}
               />
             </div>
           </section>
@@ -219,7 +210,7 @@ export default function App() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-slate-900">Formato Serial (CSV)</div>
-                    <div className="text-xs text-slate-500">t1,t2,t3,temp,hum,voc</div>
+                    <div className="text-xs text-slate-500">t1,t2,temp,hum,voc</div>
                   </div>
                 </div>
 
@@ -233,16 +224,13 @@ export default function App() {
                         2: <span className="font-medium">Termopar 2</span> (°C)
                       </div>
                       <div>
-                        3: <span className="font-medium">Termopar 3</span> (°C)
+                        3: <span className="font-medium">Temperatura Ambiente</span> (°C)
                       </div>
                       <div>
-                        4: <span className="font-medium">Temperatura Ambiente</span> (°C)
+                        4: <span className="font-medium">Umidade</span> (%)
                       </div>
                       <div>
-                        5: <span className="font-medium">Umidade</span> (%)
-                      </div>
-                      <div>
-                        6: <span className="font-medium">VOC</span> (kΩ)
+                        5: <span className="font-medium">VOC</span> (kΩ)
                       </div>
                     </div>
                   </div>

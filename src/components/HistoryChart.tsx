@@ -6,7 +6,6 @@ export type HistoryRow = {
   label: string;
   t1: number;
   t2: number;
-  t3: number;
 };
 
 export default function HistoryChart({ data }: { data: HistoryRow[] }) {
@@ -20,7 +19,7 @@ export default function HistoryChart({ data }: { data: HistoryRow[] }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-900">Histórico de Temperaturas (°C)</div>
-          <div className="text-xs text-slate-500">Atualização em tempo real • Termopares 1–3</div>
+          <div className="text-xs text-slate-500">Atualização em tempo real • Termopares 1–2</div>
         </div>
         <div className="rounded-full bg-slate-900/5 px-3 py-1 text-[11px] font-medium text-slate-600">
           Realtime
@@ -69,16 +68,6 @@ export default function HistoryChart({ data }: { data: HistoryRow[] }) {
               dataKey="t2"
               name="Termopar 2"
               stroke="#f97316"
-              strokeWidth={2}
-              dot={false}
-              isAnimationActive
-              animationDuration={450}
-            />
-            <Line
-              type="monotone"
-              dataKey="t3"
-              name="Termopar 3"
-              stroke="#22c55e"
               strokeWidth={2}
               dot={false}
               isAnimationActive

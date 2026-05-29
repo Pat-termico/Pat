@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Cpu, Download, PlugZap, Timer } from "lucide-react";
+import { Download, PlugZap, Timer } from "lucide-react";
 import type { ConnectionStatus } from "../lib/types";
+import internalLogo from "../assets/EVA LTDA Embedde.png";
 
 function formatNow(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -68,8 +69,8 @@ export default function Header({
     <div className="sticky top-0 z-10 border-b border-slate-200/70 bg-white/75 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-900 text-white shadow-soft">
-            <Cpu className="h-5 w-5" />
+          <div className="grid h-11 w-11 place-items-center overflow-hidden rounded-2xl bg-slate-900 text-white shadow-soft">
+            <img src={internalLogo} alt="EVA LTDA" className="h-full w-full object-cover" />
           </div>
           <div className="leading-tight">
             <div className="text-lg font-semibold tracking-tight">Dashboard Arduino</div>

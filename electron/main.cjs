@@ -65,16 +65,22 @@ function createIoServer() {
 function parseCsvLine(line) {
   const raw = String(line ?? "").trim();
   const matches = raw.match(/-?\d+(?:\.\d+)?/g);
-  if (!matches || matches.length < 6) return null;
+  if (!matches || matches.length < 5) return null;
   const nums = matches.slice(0, 6).map((p) => Number(p));
-  if (nums.length !== 6 || nums.some((n) => !Number.isFinite(n))) return null;
+  if (nums.length < 5 || nums.some((n) => !Number.isFinite(n))) return null;
+
+  const isLegacyWithT3 = nums.length >= 6;
+  const t1 = nums[0];
+  const t2 = nums[1];
+  const temp = isLegacyWithT3 ? nums[3] : nums[2];
+  const hum = isLegacyWithT3 ? nums[4] : nums[3];
+  const voc = isLegacyWithT3 ? nums[5] : nums[4];
   return {
-    t1: nums[0],
-    t2: nums[1],
-    t3: nums[2],
-    temp: nums[3],
-    hum: nums[4],
-    voc: nums[5],
+    t1,
+    t2,
+    temp,
+    hum,
+    voc,
     raw,
     ts: Date.now()
   };
@@ -91,7 +97,6 @@ function parseTextLine(line) {
 
   if (/^T1:/i.test(raw)) return { kind: "value", patch: { t1: numberFrom(/T1:\s*([-+]?\d+(?:\.\d+)?)/i) } };
   if (/^T2:/i.test(raw)) return { kind: "value", patch: { t2: numberFrom(/T2:\s*([-+]?\d+(?:\.\d+)?)/i) } };
-  if (/^T3:/i.test(raw)) return { kind: "value", patch: { t3: numberFrom(/T3:\s*([-+]?\d+(?:\.\d+)?)/i) } };
 
   if (/Temp\s*Ambiente:/i.test(raw))
     return { kind: "value", patch: { temp: numberFrom(/Temp\s*Ambiente:\s*([-+]?\d+(?:\.\d+)?)/i) } };
@@ -159,7 +164,6 @@ function createSerialBridge(io) {
   const lastGood = {
     t1: 0,
     t2: 0,
-    t3: 0,
     temp: 0,
     hum: 0,
     pressure: 1012,
@@ -173,7 +177,7 @@ function createSerialBridge(io) {
 
   function emitSensorSnapshot({ ts, raw, patch }) {
     if (patch) {
-      const allowed = new Set(["t1", "t2", "t3", "temp", "hum", "pressure", "voc"]);
+      const allowed = new Set(["t1", "t2", "temp", "hum", "pressure", "voc"]);
       for (const [k, v] of Object.entries(patch)) {
         if (!allowed.has(k)) continue;
         if (Number.isFinite(v)) lastGood[k] = v;
@@ -182,14 +186,13 @@ function createSerialBridge(io) {
     const payload = {
       t1: lastGood.t1,
       t2: lastGood.t2,
-      t3: lastGood.t3,
       temp: lastGood.temp,
       hum: lastGood.hum,
       pressure: lastGood.pressure,
       voc: lastGood.voc,
       raw:
         raw ||
-        `${lastGood.t1},${lastGood.t2},${lastGood.t3},${lastGood.temp},${lastGood.hum},${lastGood.voc}`,
+        `${lastGood.t1},${lastGood.t2},${lastGood.temp},${lastGood.hum},${lastGood.voc}`,
       ts
     };
     io.emit("sensor", payload);
@@ -403,8 +406,14 @@ async function createMainWindow({ socketUrl }) {
 let disposeSerial = null;
 
 function getWindowIconPath() {
-  const p = path.join(__dirname, "..", "build", "icon.png");
-  return fsSync.existsSync(p) ? p : undefined;
+  const candidates = [
+    path.join(__dirname, "..", "build", "Logo_web-site.png"),
+    path.join(__dirname, "..", "build", "icon.png")
+  ];
+  for (const p of candidates) {
+    if (fsSync.existsSync(p)) return p;
+  }
+  return undefined;
 }
 
 app.on("window-all-closed", () => {

@@ -1,7 +1,6 @@
 export type SensorPayload = {
   t1: number;
   t2: number;
-  t3: number;
   temp: number;
   hum: number;
   pressure?: number;

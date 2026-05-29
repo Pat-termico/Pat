@@ -42,11 +42,12 @@
   "build": {
     "appId": "com.pat.dashboardarduino",
     "productName": "Dashboard Arduino",
-    "icon": "build/icon.png",
+    "icon": "build/Logo_web-site.png",
     "files": [
       "dist/**",
       "electron/**",
       "build/icon.png",
+      "build/Logo_web-site.png",
       "package.json"
     ],
     "asar": true,
