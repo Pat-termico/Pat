@@ -69,8 +69,8 @@ export default function Header({
     <div className="sticky top-0 z-10 border-b border-slate-200/70 bg-white/75 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="grid h-12 w-28 place-items-center overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/70 sm:h-14 sm:w-36">
-            <img src={internalLogo} alt="EVA LTDA" className="h-full w-full object-contain p-1 sm:p-1.5" />
+          <div className="grid h-12 w-28 place-items-center sm:h-14 sm:w-36">
+            <img src={internalLogo} alt="EVA LTDA" className="h-full w-full object-contain" />
           </div>
           <div className="leading-tight">
             <div className="text-lg font-semibold tracking-tight">Dashboard Arduino</div>
