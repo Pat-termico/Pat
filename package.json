@@ -1,7 +1,7 @@
 {
   "name": "dashboard-arduino-scada",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Dashboard industrial premium em tempo real para Arduino UNO (Electron + React + Tailwind + Serial + Socket.IO).",
   "main": "electron/main.cjs",
   "author": "",
@@ -41,7 +41,7 @@
     "wait-on": "^8.0.5"
   },
   "build": {
-    "appId": "com.eva.dashboard.arduino",
+    "appId": "com.pattermico.dashboard.arduino",
     "productName": "Dashboard Arduino",
     "icon": "build/Logo_web-site.png",
     "asar": true,
@@ -49,8 +49,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "Eva-ltda",
-        "repo": "PAT",
+        "owner": "Pat-termico",
+        "repo": "Pat",
         "releaseType": "release"
       }
     ],
@@ -84,9 +84,7 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "build/Logo_web-site.png",
-      "uninstallerIcon": "build/Logo_web-site.png"
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

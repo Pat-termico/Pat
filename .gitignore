@@ -18,3 +18,13 @@ pnpm-debug.log*
 .env
 .env.*
 
+# ===== arquivos temporários build local =====
+.build-admin.*
+run-*.ps1
+run-*.cjs
+build-admin.ps1
+
+# ===== pastas pessoais / fora do repo =====
+VOC/
+Logo/
+
