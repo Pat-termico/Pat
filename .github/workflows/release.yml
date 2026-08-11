@@ -1,0 +1,56 @@
+name: release-windows-installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund --loglevel verbose
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "npm ci falhou; tentando npm install..."
+            npm install --ignore-scripts --no-audit --no-fund --loglevel verbose
+          }
+
+      - name: Build (renderer)
+        run: npm run build:renderer
+
+      - name: Show electron-builder version
+        run: npx electron-builder --version
+
+      - name: Package and publish (electron-builder)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: "electron-builder,electron-rebuild"
+        run: npx electron-builder --win --x64 --publish always
+
+      - name: List release output
+        shell: pwsh
+        run: |
+          if (Test-Path release) { Get-ChildItem -Recurse release | Select-Object FullName, Length }
+          else { Write-Host "Diretorio release/ nao encontrado" }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashboardArduino-windows
+          path: release/**

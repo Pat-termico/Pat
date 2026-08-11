@@ -4,8 +4,25 @@ const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
 const fs = require("fs/promises");
+let autoUpdater = null;
+try {
+  autoUpdater = require("electron-updater").autoUpdater;
+} catch {
+  autoUpdater = null;
+}
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+let autoUpdateCheckTimer = null;
+
+if (isDev || process.env.ELECTRON_LOCAL_DATA) {
+  const localDataRoot = path.join(__dirname, "..", ".electron-temp");
+  const userDataDir = path.join(localDataRoot, "userData");
+  const cacheDir = path.join(localDataRoot, "cache");
+  fsSync.mkdirSync(userDataDir, { recursive: true });
+  fsSync.mkdirSync(cacheDir, { recursive: true });
+  app.setPath("userData", userDataDir);
+  app.setPath("cache", cacheDir);
+}
 
 function readArgValue(name) {
   const pref = `--${name}=`;
@@ -416,8 +433,76 @@ function getWindowIconPath() {
   return undefined;
 }
 
+function configureAutoUpdater() {
+  if (!autoUpdater || !app.isPackaged || process.platform !== "win32") return;
+
+  try {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+  } catch {
+    return;
+  }
+
+  autoUpdater.on("error", (error) => {
+    console.error("Falha no auto update:", error);
+  });
+
+  autoUpdater.on("update-available", () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    dialog
+      .showMessageBox(win, {
+        type: "info",
+        title: "Atualização disponível",
+        message: "Uma nova versão do Dashboard Arduino foi encontrada.",
+        detail: "O download será feito automaticamente em segundo plano.",
+        buttons: ["OK"]
+      })
+      .catch(() => {});
+  });
+
+  autoUpdater.on("update-downloaded", () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    dialog
+      .showMessageBox(win, {
+        type: "question",
+        title: "Atualização pronta",
+        message: "A nova versão do Dashboard Arduino já foi baixada.",
+        detail: "Clique em Reiniciar agora para instalar a atualização.",
+        buttons: ["Reiniciar agora", "Depois"],
+        defaultId: 0,
+        cancelId: 1
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          try {
+            autoUpdater.quitAndInstall();
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  });
+
+  const checkForUpdates = () => {
+    try {
+      autoUpdater.checkForUpdates().catch((error) => {
+        console.error("Falha ao verificar atualizações:", error);
+      });
+    } catch {}
+  };
+
+  checkForUpdates();
+  autoUpdateCheckTimer = setInterval(checkForUpdates, 30 * 60 * 1000);
+}
+
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  if (autoUpdateCheckTimer) {
+    clearInterval(autoUpdateCheckTimer);
+    autoUpdateCheckTimer = null;
+  }
 });
 
 app.whenReady().then(async () => {
@@ -463,8 +548,17 @@ app.whenReady().then(async () => {
   });
 
   await createMainWindow({ socketUrl });
+  configureAutoUpdater();
 });
 
+let disposeSerialRan = false;
 app.on("before-quit", async () => {
-  if (disposeSerial) await disposeSerial();
+  if (autoUpdateCheckTimer) {
+    clearInterval(autoUpdateCheckTimer);
+    autoUpdateCheckTimer = null;
+  }
+  if (!disposeSerialRan && disposeSerial) {
+    disposeSerialRan = true;
+    await disposeSerial();
+  }
 });

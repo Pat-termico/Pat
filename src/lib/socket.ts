@@ -4,6 +4,7 @@ import type { ConnectionStatus, SensorPayload } from "./types";
 export type ServerToClientEvents = {
   status: (s: ConnectionStatus) => void;
   sensor: (p: SensorPayload) => void;
+  serialLine: (p: { ts: number; raw: string; parsed: boolean }) => void;
 };
 
 export type ClientToServerEvents = {
