@@ -25,11 +25,21 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
-          npm ci --ignore-scripts --no-audit --no-fund --loglevel verbose
+          npm ci --ignore-scripts --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) {
             Write-Host "npm ci falhou; tentando npm install..."
-            npm install --ignore-scripts --no-audit --no-fund --loglevel verbose
+            npm install --ignore-scripts --no-audit --no-fund
           }
+          $env:ELECTRON_CACHE = Join-Path (Get-Location) ".electron-cache"
+          $env:ELECTRON_BUILDER_CACHE = Join-Path (Get-Location) ".electron-builder-cache"
+          Write-Host "Recompilando electron, electron-builder e native modules..."
+          npx electron-rebuild --version (node -e "process.stdout.write(require('./node_modules/electron/package.json').version)") 2>&1 | Out-String -Width 260
+          if ($LASTEXITCODE -ne 0) { Write-Host "electron-rebuild aviso (nao-fatal) exit=$LASTEXITCODE" }
+          npm ls electron electron-builder electron-updater serialport 2>$null
+          node -e "console.log('electron-builder bin exists:', require('fs').existsSync('node_modules/electron-builder/cli.js'))"
+
+      - name: Lint and typecheck
+        run: npm run lint
 
       - name: Build (renderer)
         run: npm run build:renderer
@@ -38,10 +48,30 @@ jobs:
         run: npx electron-builder --version
 
       - name: Package and publish (electron-builder)
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEBUG: "electron-builder,electron-rebuild"
-        run: npx electron-builder --win --x64 --publish always
+          DEBUG: "electron-builder,electron-rebuild,electron-updater"
+          ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+          ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.electron-builder-cache
+        run: |
+          Write-Host "GH_TOKEN vazio? $([string]::IsNullOrWhiteSpace($env:GH_TOKEN))"
+          Write-Host "workspace=$PWD"
+          New-Item -ItemType Directory -Force -Path ".electron-cache",".electron-builder-cache" | Out-Null
+          $proc = Start-Process -FilePath (Join-Path (Get-Location) "node_modules\.bin\electron-builder.cmd") -ArgumentList "--win","--x64","--publish","always" -NoNewWindow -PassThru -RedirectStandardOutput ".build-ci.log" -RedirectStandardError ".build-ci.err.log"
+          do {
+            Start-Sleep -Seconds 20
+            $t = Get-Date -Format "HH:mm:ss"
+            Write-Host "[$t] running... exit=$($proc.HasExited)"
+            $lines = Get-Content ".build-ci.log" -Tail 8 -ErrorAction SilentlyContinue
+            if ($lines) { $lines | ForEach-Object { Write-Host "  $_" } }
+          } while (-not $proc.HasExited)
+          Write-Host "EXIT=$($proc.ExitCode)"
+          Write-Host "---TAIL 260 STDOUT---"
+          Get-Content ".build-ci.log" -Tail 260 -ErrorAction SilentlyContinue
+          Write-Host "---TAIL 120 STDERR---"
+          Get-Content ".build-ci.err.log" -Tail 120 -ErrorAction SilentlyContinue
+          if ($proc.ExitCode -ne 0) { exit $proc.ExitCode }
 
       - name: List release output
         shell: pwsh
