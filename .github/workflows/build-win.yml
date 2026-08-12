@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: ["main"]
-    tags:
-      - "v*"
+  pull_request:
+    branches: ["main"]
 
 jobs:
   build:
@@ -25,7 +25,24 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "npm ci falhou; tentando npm install..."
+            npm install --ignore-scripts --no-audit --no-fund
+          }
+          $env:ELECTRON_CACHE = Join-Path (Get-Location) ".electron-cache"
+          $env:ELECTRON_BUILDER_CACHE = Join-Path (Get-Location) ".electron-builder-cache"
+          Write-Host "Recompilando native modules (serialport)..."
+          try {
+            npx electron-rebuild --version (node -e "process.stdout.write(require('./node_modules/electron/package.json').version)") 2>&1 | Out-String -Width 260
+          } catch {
+            Write-Host "electron-rebuild aviso (nao-fatal): $_"
+          }
+
+      - name: Lint and typecheck
+        run: npm run lint
 
       - name: Build renderer
         run: npm run build:renderer
@@ -36,6 +53,8 @@ jobs:
       - name: Build Windows executables
         env:
           DEBUG: "electron-builder,electron-rebuild"
+          ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+          ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.electron-builder-cache
         run: npx electron-builder --win --x64 --publish never
 
       - name: Upload artifacts
@@ -43,14 +62,3 @@ jobs:
         with:
           name: DashboardArduino-windows
           path: release/**
-
-      - name: Upload to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/*.exe
-            release/*.yml
-            release/*.yaml
-            release/*.zip
-            release/*.7z
