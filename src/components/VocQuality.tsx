@@ -2,12 +2,12 @@ import { motion } from "framer-motion";
 import { Leaf, Waves } from "lucide-react";
 import { calcularQualidadeVOC } from "../lib/voc";
 
-function formatVoc(v: number) {
-  if (!Number.isFinite(v)) return "0";
+function formatVoc(v: number | null | undefined) {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "---";
   return Math.round(v).toString();
 }
 
-export default function VocQuality({ voc }: { voc: number }) {
+export default function VocQuality({ voc }: { voc: number | null }) {
   const q = calcularQualidadeVOC(voc);
 
   const statusPill =
@@ -17,7 +17,9 @@ export default function VocQuality({ voc }: { voc: number }) {
         ? "bg-lime-50 text-lime-700 ring-1 ring-lime-200"
         : q.faixa === "moderada"
           ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
-          : "bg-red-50 text-red-700 ring-1 ring-red-200";
+          : q.faixa === "indisponivel"
+            ? "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
+            : "bg-red-50 text-red-700 ring-1 ring-red-200";
 
   const pointerColor =
     q.faixa === "excelente"
@@ -26,7 +28,9 @@ export default function VocQuality({ voc }: { voc: number }) {
         ? "bg-lime-600"
         : q.faixa === "moderada"
           ? "bg-amber-600"
-          : "bg-red-600";
+          : q.faixa === "indisponivel"
+            ? "bg-slate-400"
+            : "bg-red-600";
 
   return (
     <motion.div
@@ -91,7 +95,9 @@ export default function VocQuality({ voc }: { voc: number }) {
                   ? "Condições estáveis"
                   : q.faixa === "moderada"
                     ? "Atenção: ventilação recomendada"
-                    : "Alerta: qualidade baixa"}
+                    : q.faixa === "indisponivel"
+                      ? "Aguardando leitura do BME680"
+                      : "Alerta: qualidade baixa"}
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, PlugZap, Timer } from "lucide-react";
+import { Download, HardDriveSave, PlugZap, Timer } from "lucide-react";
 import type { ConnectionStatus } from "../lib/types";
 import internalLogo from "../assets/EVA LTDA Embedde.png";
 
@@ -8,20 +8,40 @@ function formatNow(d: Date) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+function formatRel(ts?: number) {
+  if (!ts) return "Sem leitura";
+  const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (diff < 5) return "Agora";
+  if (diff < 60) return `${diff}s atrás`;
+  const m = Math.floor(diff / 60);
+  if (m < 60) return `${m}min atrás`;
+  const h = Math.floor(m / 60);
+  return `${h}h atrás`;
+}
+
 export default function Header({
   status,
   onExport,
-  exportDisabled
+  onBackup,
+  exportDisabled,
+  lastReadTs,
+  backupInfo
 }: {
   status: ConnectionStatus;
   onExport?: () => void;
+  onBackup?: () => void;
   exportDisabled?: boolean;
+  lastReadTs?: number;
+  backupInfo?: { baseDir?: string; rows?: number } | null;
 }) {
   const [now, setNow] = useState(() => new Date());
   const [ports, setPorts] = useState<{ path: string; manufacturer?: string }[]>([]);
-
+  const [backupTick, setBackupTick] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 250);
+    const id = window.setInterval(() => {
+      setNow(new Date());
+      setBackupTick((x) => x + 1);
+    }, 250);
     return () => window.clearInterval(id);
   }, []);
 
@@ -92,17 +112,36 @@ export default function Header({
             </button>
           ) : null}
 
+          {onBackup ? (
+            <button
+              type="button"
+              onClick={onBackup}
+              className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 shadow-soft ring-1 ring-emerald-200 transition hover:bg-emerald-100 sm:flex"
+              title={
+                backupInfo && backupInfo.baseDir
+                  ? `Pasta: ${backupInfo.baseDir} • Amostras: ${backupInfo.rows ?? 0}`
+                  : "Fazer backup agora"
+              }
+            >
+              <HardDriveSave className="h-4 w-4 opacity-80" />
+              <span>Backup agora</span>
+            </button>
+          ) : null}
+
           <div className="relative">
             <button
               type="button"
               className={`flex items-center gap-2 rounded-full px-3 py-2 text-xs font-medium ${statusUi.pill}`}
-              title={status.error ? status.error : ""}
+              title={status.error ? status.error : `Última leitura: ${formatRel(lastReadTs ?? status.lastSeenTs)}`}
             >
               <span className={`h-2 w-2 rounded-full ${statusUi.dot}`} />
               <PlugZap className="h-4 w-4 opacity-80" />
               <span>{statusUi.label}</span>
               <span className="hidden text-slate-500 sm:inline">
                 {status.portPath ? `• ${status.portPath}` : ""}
+              </span>
+              <span className="ml-1 hidden rounded-full bg-white/60 px-2 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200/80 sm:inline">
+                {formatRel(lastReadTs ?? status.lastSeenTs)}
               </span>
               {status.error ? (
                 <span className="ml-1 hidden rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-200 sm:inline">

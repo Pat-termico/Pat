@@ -1,12 +1,14 @@
 export type SensorPayload = {
-  t1: number;
-  t2: number;
-  temp: number;
-  hum: number;
-  pressure?: number;
-  voc: number;
+  t1: number | null;
+  t2: number | null;
+  t3: number | null;
+  temp: number | null;
+  hum: number | null;
+  pressure: number | null;
+  voc: number | null;
   raw: string;
   ts: number;
+  legacy?: boolean;
 };
 
 export type ConnectionStatus = {

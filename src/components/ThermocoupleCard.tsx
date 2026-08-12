@@ -2,19 +2,25 @@ import { motion } from "framer-motion";
 import { Flame } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from "recharts";
 
-type Point = { ts: number; v: number };
+type Point = { ts: number; v: number | null };
 
-function clampNumber(n: number) {
-  return Number.isFinite(n) ? n : 0;
+function clampNumber(n: number | null | undefined): number | null {
+  if (typeof n === "number" && Number.isFinite(n)) return n;
+  return null;
 }
 
-function formatValue(v: number) {
-  return clampNumber(v).toFixed(1);
+function formatValue(v: number | null | undefined): string {
+  const n = clampNumber(v);
+  if (n === null) return "---";
+  return n.toFixed(1);
 }
 
 function toSparkData(points: Point[]) {
-  const sliced = points.slice(-40);
-  return sliced.map((p) => ({ x: p.ts, v: p.v }));
+  const filtered = points
+    .slice(-40)
+    .map((p) => ({ x: p.ts, v: typeof p.v === "number" && Number.isFinite(p.v) ? p.v : null }))
+    .filter((p): p is { x: number; v: number } => p.v !== null);
+  return filtered;
 }
 
 export default function ThermocoupleCard({
@@ -24,13 +30,13 @@ export default function ThermocoupleCard({
   history
 }: {
   title: string;
-  value: number;
+  value: number | null;
   color: "red" | "orange" | "green";
   history: Point[];
 }) {
   const spark = toSparkData(history);
-  const min = spark.length ? Math.min(...spark.map((p) => p.v)) : 0;
-  const max = spark.length ? Math.max(...spark.map((p) => p.v)) : 0;
+  const min = spark.length ? Math.min(...spark.map((p) => p.v)) : null;
+  const max = spark.length ? Math.max(...spark.map((p) => p.v)) : null;
 
   const palette =
     color === "red"

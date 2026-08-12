@@ -16,5 +16,7 @@ contextBridge.exposeInMainWorld("DashboardArduino", {
   platform: process.platform,
   exportCsv: (args) => ipcRenderer.invoke("dashboard:exportCsv", args),
   listSerialPorts: () => ipcRenderer.invoke("dashboard:listSerialPorts"),
-  setSerialPort: (portPath) => ipcRenderer.invoke("dashboard:setSerialPort", { portPath })
+  setSerialPort: (portPath) => ipcRenderer.invoke("dashboard:setSerialPort", { portPath }),
+  runBackupManual: () => ipcRenderer.invoke("dashboard:runBackupManual"),
+  getBackupInfo: () => ipcRenderer.invoke("dashboard:getBackupInfo")
 });

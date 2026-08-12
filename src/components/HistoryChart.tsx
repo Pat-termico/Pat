@@ -4,8 +4,9 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 export type HistoryRow = {
   ts: number;
   label: string;
-  t1: number;
-  t2: number;
+  t1: number | null;
+  t2: number | null;
+  t3: number | null;
 };
 
 export default function HistoryChart({ data }: { data: HistoryRow[] }) {
@@ -19,7 +20,7 @@ export default function HistoryChart({ data }: { data: HistoryRow[] }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-900">Histórico de Temperaturas (°C)</div>
-          <div className="text-xs text-slate-500">Atualização em tempo real • Termopares 1–2</div>
+          <div className="text-xs text-slate-500">Atualização em tempo real • Termopares 1, 2 e 3</div>
         </div>
         <div className="rounded-full bg-slate-900/5 px-3 py-1 text-[11px] font-medium text-slate-600">
           Realtime
@@ -42,6 +43,7 @@ export default function HistoryChart({ data }: { data: HistoryRow[] }) {
               tickLine={false}
               width={42}
               domain={["auto", "auto"]}
+              allowDataOverflow={false}
             />
             <Tooltip
               contentStyle={{
@@ -50,7 +52,10 @@ export default function HistoryChart({ data }: { data: HistoryRow[] }) {
                 boxShadow: "0 10px 25px rgba(15,23,42,0.12)",
                 fontSize: 12
               }}
-              formatter={(v: unknown, name: unknown) => [`${Number(v).toFixed(1)} °C`, String(name)]}
+              formatter={(v: unknown, name: unknown) => [
+                typeof v === "number" && Number.isFinite(v) ? `${v.toFixed(1)} °C` : "---",
+                String(name)
+              ]}
               labelFormatter={(l: string | number) => `Horário ${l}`}
             />
             <Line
@@ -60,6 +65,7 @@ export default function HistoryChart({ data }: { data: HistoryRow[] }) {
               stroke="#ef4444"
               strokeWidth={2}
               dot={false}
+              connectNulls
               isAnimationActive
               animationDuration={450}
             />
@@ -70,6 +76,18 @@ export default function HistoryChart({ data }: { data: HistoryRow[] }) {
               stroke="#f97316"
               strokeWidth={2}
               dot={false}
+              connectNulls
+              isAnimationActive
+              animationDuration={450}
+            />
+            <Line
+              type="monotone"
+              dataKey="t3"
+              name="Termopar 3"
+              stroke="#22c55e"
+              strokeWidth={2}
+              dot={false}
+              connectNulls
               isAnimationActive
               animationDuration={450}
             />

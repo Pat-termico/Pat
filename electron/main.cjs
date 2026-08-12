@@ -1,9 +1,10 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const fsSync = require("fs");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
 const fs = require("fs/promises");
+const { parseCsvLine, parseTextLine, calcularQualidadeVOC } = require("./lib/parsers.cjs");
 let autoUpdater = null;
 try {
   autoUpdater = require("electron-updater").autoUpdater;
@@ -179,39 +180,61 @@ function createSerialBridge(io) {
   let textFrameTouched = false;
 
   const lastGood = {
-    t1: 0,
-    t2: 0,
-    temp: 0,
-    hum: 0,
-    pressure: 1012,
-    voc: 0
+    t1: null,
+    t2: null,
+    t3: null,
+    temp: null,
+    hum: null,
+    pressure: null,
+    voc: null
   };
+  let sessionHistory = [];
 
   function emitStatus(next) {
     lastStatus = { ...lastStatus, ...next };
     io.emit("status", lastStatus);
   }
 
-  function emitSensorSnapshot({ ts, raw, patch }) {
+  function sessionHistoryPush(row) {
+    sessionHistory.push(row);
+    const MAX = 10_800;
+    if (sessionHistory.length > MAX) {
+      sessionHistory = sessionHistory.slice(sessionHistory.length - MAX);
+    }
+  }
+
+  function getSessionHistory() {
+    return sessionHistory.slice();
+  }
+
+  function emitSensorSnapshot({ ts, raw, patch, legacy }) {
+    const allowed = new Set(["t1", "t2", "t3", "temp", "hum", "pressure", "voc"]);
     if (patch) {
-      const allowed = new Set(["t1", "t2", "temp", "hum", "pressure", "voc"]);
       for (const [k, v] of Object.entries(patch)) {
         if (!allowed.has(k)) continue;
-        if (Number.isFinite(v)) lastGood[k] = v;
+        if (typeof v === "number" && Number.isFinite(v)) {
+          lastGood[k] = v;
+        } else if (v === null) {
+        }
       }
     }
     const payload = {
       t1: lastGood.t1,
       t2: lastGood.t2,
+      t3: lastGood.t3,
       temp: lastGood.temp,
       hum: lastGood.hum,
       pressure: lastGood.pressure,
       voc: lastGood.voc,
       raw:
         raw ||
-        `${lastGood.t1},${lastGood.t2},${lastGood.temp},${lastGood.hum},${lastGood.voc}`,
-      ts
+        [lastGood.t1, lastGood.t2, lastGood.t3, lastGood.temp, lastGood.hum, lastGood.pressure, lastGood.voc]
+          .map((x) => (typeof x === "number" ? String(x) : ""))
+          .join(","),
+      ts,
+      legacy: Boolean(legacy || false)
     };
+    sessionHistoryPush(payload);
     io.emit("sensor", payload);
   }
 
@@ -389,7 +412,119 @@ function createSerialBridge(io) {
     };
   }
 
-  return { start, getStatus: () => lastStatus, setPreferredPath };
+  return {
+    start,
+    getStatus: () => lastStatus,
+    setPreferredPath,
+    getSessionHistory,
+    clearSessionHistory: () => {
+      sessionHistory = [];
+    }
+  };
+}
+
+function yyyymmdd(d = new Date()) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function hhmmss(d = new Date()) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+}
+
+function getBackupBaseDir() {
+  const fallbacks = [];
+  try {
+    fallbacks.push(path.join(app.getPath("userData"), "Backups"));
+  } catch {}
+  try {
+    fallbacks.push(path.join(app.getPath("documents"), "Dashboard Arduino", "Backups"));
+  } catch {}
+  for (const p of fallbacks) {
+    try {
+      fsSync.mkdirSync(path.dirname(p), { recursive: true });
+      fsSync.mkdirSync(p, { recursive: true });
+      if (fsSync.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
+function buildSessionCsv(rows, options = {}) {
+  const { includeHeader = true, semicolon = true } = options;
+  const sep = semicolon ? ";" : ",";
+  const fmtNum = (x) => {
+    if (x === null || x === undefined || typeof x !== "number" || !Number.isFinite(x)) return "";
+    return String(x);
+  };
+  const fmtQ = (x) => {
+    const q = calcularQualidadeVOC(x);
+    return q.texto;
+  };
+  const headers = [
+    "Data",
+    "Hora",
+    "Termopar 1",
+    "Termopar 2",
+    "Termopar 3",
+    "Temperatura Ambiente",
+    "Umidade",
+    "Pressão",
+    "VOC",
+    "Qualidade do Ar"
+  ];
+  const lines = [];
+  if (includeHeader) lines.push(headers.join(sep));
+  for (const r of rows) {
+    const dt = new Date(r.ts);
+    lines.push(
+      [
+        dt.toLocaleDateString("pt-BR"),
+        dt.toLocaleTimeString("pt-BR"),
+        fmtNum(r.t1),
+        fmtNum(r.t2),
+        fmtNum(r.t3),
+        fmtNum(r.temp),
+        fmtNum(r.hum),
+        fmtNum(r.pressure),
+        fmtNum(r.voc),
+        fmtQ(r.voc)
+      ].join(sep)
+    );
+  }
+  return lines.join("\r\n");
+}
+
+async function writeBackupFile(baseDir, prefix, rows, { allowOverwriteOld = true, overwriteTargetPath = null } = {}) {
+  if (!baseDir || !rows || !rows.length) return null;
+  const dayDir = path.join(baseDir, yyyymmdd());
+  await fs.mkdir(dayDir, { recursive: true });
+  let targetPath = overwriteTargetPath;
+  if (!targetPath) targetPath = path.join(dayDir, `${prefix}_${yyyymmdd()}_${hhmmss()}.csv`);
+  const utf8Bom = "\uFEFF";
+  const csvBody = buildSessionCsv(rows);
+  const tmp = `${targetPath}.tmp`;
+  await fs.writeFile(tmp, utf8Bom + csvBody, "utf8");
+  let tries = 0;
+  do {
+    try {
+      await fs.rename(tmp, targetPath);
+      return targetPath;
+    } catch {
+      try {
+        await fs.copyFile(tmp, targetPath);
+        try { await fs.rm(tmp, { force: true }); } catch {}
+        return targetPath;
+      } catch {}
+    }
+    tries++;
+    if (!allowOverwriteOld) {
+      targetPath = path.join(dayDir, `${prefix}_${yyyymmdd()}_${hhmmss()}_${process.pid}_${tries}.csv`);
+    }
+  } while (tries < 5);
+  try { await fs.rm(tmp, { force: true }); } catch {}
+  return null;
 }
 
 async function createMainWindow({ socketUrl }) {
@@ -406,21 +541,47 @@ async function createMainWindow({ socketUrl }) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      additionalArguments: [`--socketUrl=${socketUrl}`, `--appVersion=${app.getVersion()}`]
+      additionalArguments: [`--socketUrl=${socketUrl}`, `--appVersion=${app.getVersion()}`],
+      devTools: !app.isPackaged
     }
   });
 
   if (isDev) {
     await win.loadURL(process.env.VITE_DEV_SERVER_URL);
-    win.webContents.openDevTools({ mode: "detach" });
+    try { win.webContents.openDevTools({ mode: "detach" }); } catch {}
   } else {
+    try {
+      win.removeMenu();
+      if (Menu && typeof Menu.setApplicationMenu === "function") {
+        Menu.setApplicationMenu(null);
+      }
+    } catch {}
     await win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+  }
+
+  if (app.isPackaged) {
+    try {
+      win.webContents.on("devtools-opened", () => {
+        try { win.webContents.closeDevTools(); } catch {}
+      });
+      win.webContents.on("before-input-event", (_e, input) => {
+        const key = (input.key || "").toLowerCase();
+        const f12 = input.key === "F12";
+        const ctrlShiftI = (input.control || input.meta) && input.shift && key === "i";
+        const ctrlShiftJ = (input.control || input.meta) && input.shift && key === "j";
+        const ctrlShiftC = (input.control || input.meta) && input.shift && key === "c";
+        if (f12 || ctrlShiftI || ctrlShiftJ || ctrlShiftC) {
+          try { win.webContents.closeDevTools(); } catch {}
+        }
+      });
+    } catch {}
   }
 
   return win;
 }
 
 let disposeSerial = null;
+let serialBridgeRef = null;
 
 function getWindowIconPath() {
   const candidates = [
@@ -498,17 +659,32 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
-  if (autoUpdateCheckTimer) {
-    clearInterval(autoUpdateCheckTimer);
-    autoUpdateCheckTimer = null;
-  }
-});
+let latestSessionBackupTarget = null;
+let latestSessionRowsAtStart = [];
 
 app.whenReady().then(async () => {
   const { io, socketUrl } = await createIoServer();
   const serial = createSerialBridge(io);
+  serialBridgeRef = serial;
   disposeSerial = await serial.start();
+
+  try {
+    const baseDir = getBackupBaseDir();
+    if (baseDir) {
+      try {
+        const dayDir = path.join(baseDir, yyyymmdd());
+        latestSessionBackupTarget = path.join(dayDir, `fim_${yyyymmdd()}_${hhmmss()}.csv`);
+        latestSessionRowsAtStart = serial.getSessionHistory ? serial.getSessionHistory() : [];
+        if (latestSessionRowsAtStart && latestSessionRowsAtStart.length > 0) {
+          try {
+            await writeBackupFile(baseDir, "inicio", latestSessionRowsAtStart, { allowOverwriteOld: false });
+          } catch (e) {
+            console.warn("backup inicio não gravado:", e?.message || String(e));
+          }
+        }
+      } catch {}
+    }
+  } catch {}
 
   ipcMain.handle("dashboard:getStatus", () => serial.getStatus());
   ipcMain.handle("dashboard:listSerialPorts", async () => {
@@ -529,18 +705,34 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
   ipcMain.handle("dashboard:exportCsv", async (event, args) => {
-    const csvText = String(args?.csvText || "");
-    const defaultFileName = String(args?.defaultFileName || "").trim() || "dashboard.csv";
     const win = BrowserWindow.fromWebContents(event.sender);
+    const rows = Array.isArray(args?.rows) && args.rows.length > 0 ? args.rows : serial.getSessionHistory();
+    const csvBody = buildSessionCsv(rows);
+    const defaultFileName = String(args?.defaultFileName || "").trim() || `Dashboard_Arduino_${yyyymmdd()}_${hhmmss().replace(/-/g, "")}.csv`;
     const { canceled, filePath } = await dialog.showSaveDialog(win, {
-      title: "Exportar dados",
+      title: "Exportar dados para Excel/CSV",
       defaultPath: path.join(app.getPath("documents"), defaultFileName),
       filters: [{ name: "CSV (Excel)", extensions: ["csv"] }]
     });
     if (canceled || !filePath) return { canceled: true };
-    const content = csvText.startsWith("\ufeff") ? csvText : `\ufeff${csvText}`;
+    const content = "\uFEFF" + csvBody;
     await fs.writeFile(filePath, content, "utf8");
-    return { canceled: false, filePath };
+    return { canceled: false, filePath, rows: rows.length };
+  });
+  ipcMain.handle("dashboard:runBackupManual", async () => {
+    try {
+      const baseDir = getBackupBaseDir();
+      const rows = serial.getSessionHistory ? serial.getSessionHistory() : [];
+      const written = await writeBackupFile(baseDir, "manual", rows, { allowOverwriteOld: false });
+      return { ok: Boolean(written), path: written || undefined, rows: rows.length, baseDir: baseDir || undefined };
+    } catch (e) {
+      return { ok: false, error: e?.message || String(e) };
+    }
+  });
+  ipcMain.handle("dashboard:getBackupInfo", async () => {
+    const baseDir = getBackupBaseDir();
+    const rows = serial.getSessionHistory ? serial.getSessionHistory() : [];
+    return { baseDir: baseDir || undefined, rows: rows.length };
   });
 
   io.on("connection", (socket) => {
@@ -557,8 +749,26 @@ app.on("before-quit", async () => {
     clearInterval(autoUpdateCheckTimer);
     autoUpdateCheckTimer = null;
   }
-  if (!disposeSerialRan && disposeSerial) {
-    disposeSerialRan = true;
-    await disposeSerial();
+  if (disposeSerialRan) return;
+  disposeSerialRan = true;
+
+  try {
+    const serial = serialBridgeRef;
+    const baseDir = getBackupBaseDir();
+    const rows = serial?.getSessionHistory ? serial.getSessionHistory() : [];
+    if (baseDir && rows.length > 0) {
+      try {
+        await writeBackupFile(baseDir, "fim", rows, { allowOverwriteOld: true, overwriteTargetPath: latestSessionBackupTarget });
+      } catch (e) {
+        console.warn("backup fim não gravado:", e?.message || String(e));
+      }
+    }
+  } catch (e) {
+    console.warn("backup fim falhou:", e?.message || String(e));
+  }
+
+  if (typeof disposeSerial === "function") {
+    try { await disposeSerial(); } catch {}
   }
 });
+
