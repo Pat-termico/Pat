@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, HardDriveSave, PlugZap, Timer } from "lucide-react";
+import { Download, HardDrive, PlugZap, Timer } from "lucide-react";
 import type { ConnectionStatus } from "../lib/types";
 import internalLogo from "../assets/EVA LTDA Embedde.png";
 
@@ -123,7 +123,7 @@ export default function Header({
                   : "Fazer backup agora"
               }
             >
-              <HardDriveSave className="h-4 w-4 opacity-80" />
+              <HardDrive className="h-4 w-4 opacity-80" />
               <span>Backup agora</span>
             </button>
           ) : null}
