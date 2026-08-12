@@ -1,7 +1,7 @@
 {
   "name": "dashboard-arduino-scada",
   "private": true,
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Dashboard industrial premium em tempo real para Arduino UNO (Electron + React + Tailwind + Serial + Socket.IO).",
   "main": "electron/main.cjs",
   "author": "",
@@ -48,7 +48,7 @@
     "productName": "Dashboard Arduino",
     "icon": "build/Logo_web-site.png",
     "asar": true,
-    "npmRebuild": false,
+    "npmRebuild": true,
     "publish": [
       {
         "provider": "github",
