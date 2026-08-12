@@ -80,56 +80,6 @@ function createIoServer() {
   });
 }
 
-function parseCsvLine(line) {
-  const raw = String(line ?? "").trim();
-  const matches = raw.match(/-?\d+(?:\.\d+)?/g);
-  if (!matches || matches.length < 5) return null;
-  const nums = matches.slice(0, 6).map((p) => Number(p));
-  if (nums.length < 5 || nums.some((n) => !Number.isFinite(n))) return null;
-
-  const isLegacyWithT3 = nums.length >= 6;
-  const t1 = nums[0];
-  const t2 = nums[1];
-  const temp = isLegacyWithT3 ? nums[3] : nums[2];
-  const hum = isLegacyWithT3 ? nums[4] : nums[3];
-  const voc = isLegacyWithT3 ? nums[5] : nums[4];
-  return {
-    t1,
-    t2,
-    temp,
-    hum,
-    voc,
-    raw,
-    ts: Date.now()
-  };
-}
-
-function parseTextLine(line) {
-  const raw = String(line ?? "").trim();
-  const numberFrom = (re) => {
-    const m = raw.match(re);
-    if (!m) return null;
-    const n = Number(m[1]);
-    return Number.isFinite(n) ? n : null;
-  };
-
-  if (/^T1:/i.test(raw)) return { kind: "value", patch: { t1: numberFrom(/T1:\s*([-+]?\d+(?:\.\d+)?)/i) } };
-  if (/^T2:/i.test(raw)) return { kind: "value", patch: { t2: numberFrom(/T2:\s*([-+]?\d+(?:\.\d+)?)/i) } };
-
-  if (/Temp\s*Ambiente:/i.test(raw))
-    return { kind: "value", patch: { temp: numberFrom(/Temp\s*Ambiente:\s*([-+]?\d+(?:\.\d+)?)/i) } };
-  if (/Umidade:/i.test(raw)) return { kind: "value", patch: { hum: numberFrom(/Umidade:\s*([-+]?\d+(?:\.\d+)?)/i) } };
-  if (/Pressao:/i.test(raw))
-    return { kind: "value", patch: { pressure: numberFrom(/Pressao:\s*([-+]?\d+(?:\.\d+)?)/i) } };
-  if (/VOC\s*\/\s*Gas:/i.test(raw))
-    return { kind: "value", patch: { voc: numberFrom(/VOC\s*\/\s*Gas:\s*([-+]?\d+(?:\.\d+)?)/i) } };
-
-  if (/^=+\s*BME680\s*=+/i.test(raw)) return { kind: "startFrame" };
-  if (/^-{10,}/.test(raw)) return { kind: "endFrame" };
-
-  return null;
-}
-
 async function pickArduinoPort(preferredPath) {
   const { SerialPort } = await loadSerialDeps();
   const ports = await SerialPort.list();
@@ -315,9 +265,9 @@ function createSerialBridge(io) {
       const parsedCsv = parseCsvLine(line);
       if (parsedCsv) {
         didParse = true;
-        emitStatus({ connected: true, error: undefined, lastSeenTs: parsedCsv.ts });
+        emitStatus({ connected: true, error: undefined, lastSeenTs: ts });
         io.emit("serialLine", { ts, raw, parsed: true });
-        emitSensorSnapshot({ ts: parsedCsv.ts, raw: parsedCsv.raw, patch: parsedCsv });
+        emitSensorSnapshot({ ts, raw: parsedCsv.raw, patch: parsedCsv.patch, legacy: parsedCsv.legacy });
         return;
       }
 

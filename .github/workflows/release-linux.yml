@@ -1,0 +1,80 @@
+name: release-linux-installer
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      USE_SYSTEM_FPM: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install Linux system deps (dpkg/rpm/pacman/libsecret)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            rpm \
+            fakeroot \
+            dpkg \
+            file \
+            libsecret-1-dev \
+            libarchive-tools \
+            xz-utils \
+            desktop-file-utils
+          which fpm || sudo gem install --no-document fpm -v 1.15.1 || true
+          fpm --version || true
+
+      - name: Install dependencies
+        run: |
+          set +e
+          npm ci --ignore-scripts --no-audit --no-fund
+          if [ $? -ne 0 ]; then
+            echo "npm ci falhou; fallback npm install --ignore-scripts"
+            npm install --ignore-scripts --no-audit --no-fund
+          fi
+          export ELECTRON_CACHE="$GITHUB_WORKSPACE/.electron-cache"
+          export ELECTRON_BUILDER_CACHE="$GITHUB_WORKSPACE/.electron-builder-cache"
+
+      - name: Lint and typecheck
+        run: npm run lint
+
+      - name: Build renderer
+        run: npm run build:renderer
+
+      - name: Show versions
+        run: |
+          node -v
+          npm -v
+          npx electron-builder --version
+
+      - name: Build and publish Linux bundles
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: "electron-builder,electron-rebuild"
+          ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache
+          ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.electron-builder-cache
+        run: npx electron-builder --linux --x64 --publish always
+
+      - name: Upload artifacts (fallback)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DashboardArduino-linux-artifacts
+          path: release/**
